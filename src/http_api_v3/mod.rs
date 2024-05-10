@@ -8,7 +8,6 @@ pub mod response;
 use chrono::prelude::Utc;
 use hmac::Hmac;
 use hmac::Mac;
-use hmac::NewMac;
 use reqwest::Method;
 use reqwest::Url;
 use sha2::Sha256;
@@ -355,7 +354,7 @@ impl Client {
     fn signature(params: &str, secret_key: &str) -> String {
         hex::encode({
             let mut hmac: Hmac<Sha256> =
-                Hmac::new_varkey(secret_key.as_bytes()).expect("HMAC is valid");
+                Hmac::new_from_slice(secret_key.as_bytes()).expect("HMAC is valid");
             hmac.update(params.as_bytes());
             hmac.finalize().into_bytes()
         })

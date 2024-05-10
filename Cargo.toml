@@ -1,8 +1,8 @@
 [package]
 name = "binance-client"
-version = "1.6.0"
+version = "1.7.0"
 authors = ["hedgar2017 <hedgar2017@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 description = "The Binance cryptocurrency exchange client"
 repository = "https://github.com/hedgar2017/binance-client"
@@ -15,17 +15,17 @@ name = "product"
 path = "src/examples/product.rs"
 
 [dependencies]
-env_logger = "0.10"
+env_logger = "0.11"
 log = "0.4"
 thiserror = "1.0"
 
 serde = "1.0"
 serde_json = "1.0"
-rust_decimal = "1.10"
+rust_decimal = "1.35"
 chrono = "0.4"
-hmac = "0.10"
-sha2 = "0.9"
+hmac = "0.12"
+sha2 = "0.10"
 hex = "0.4"
 
 reqwest = "0.9"
-websocket = "0.26"
+websocket = "0.27"

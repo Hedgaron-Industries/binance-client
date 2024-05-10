@@ -25,100 +25,81 @@ pub struct Client {}
 
 impl Client {
     ///
-    /// Subscribes to a `symbol`-dedicated trade and depth streams.
+    /// Runs the `symbol`-dedicated trade and depth streams.
     ///
-    pub fn subscribe(symbol: &str) -> Result<mpsc::Receiver<Event>, Error> {
+    /// If `depth` is `None`, it is not requested.
+    ///
+    pub fn run(symbol: &str, depth_period: Option<u64>) -> Result<mpsc::Receiver<Event>, Error> {
         let (tx, rx) = mpsc::channel();
 
-        {
-            let address = format!(
+        Self::subscribe::<Trade>(
+            format!(
                 "wss://stream.binance.com:9443/ws/{}@trade",
                 symbol.to_ascii_lowercase()
-            );
-            let mut client = ClientBuilder::new(&address)
-                .expect("WebSocket address is valid")
-                .connect_secure(None)
-                .map_err(Error::WebSocket)?;
+            )
+            .as_str(),
+            tx.clone(),
+        )?;
 
-            let tx = tx.clone();
-            thread::spawn(move || loop {
-                let message = match client.recv_message() {
-                    Ok(message) => {
-                        if message.is_ping() {
-                            log::debug!("Received ping");
-                            match client.send_message(&OwnedMessage::Pong(b"pong frame".to_vec())) {
-                                Ok(()) => log::debug!("Sent pong"),
-                                Err(error) => log::warn!("Pong sending error: {}", error),
-                            }
-                            continue;
-                        }
-
-                        message.take_payload()
-                    }
-                    Err(error) => {
-                        log::error!("Websocket error: {}", error);
-                        return;
-                    }
-                };
-
-                if message.is_empty() {
-                    continue;
-                }
-
-                match serde_json::from_slice::<Trade>(&message) {
-                    Ok(trade) => match tx.send(Event::Trade(trade)) {
-                        Ok(()) => {}
-                        Err(_) => break,
-                    },
-                    Err(error) => log::warn!("Parsing error: {} ({:?})", error, message),
-                }
-            });
-        }
-
-        {
-            let address = format!(
-                "wss://stream.binance.com:9443/ws/{}@depth@100ms",
-                symbol.to_ascii_lowercase()
-            );
-            let mut client = ClientBuilder::new(&address)
-                .expect("WebSocket address is valid")
-                .connect_secure(None)
-                .map_err(Error::WebSocket)?;
-
-            thread::spawn(move || loop {
-                let message = match client.recv_message() {
-                    Ok(message) => {
-                        if message.is_ping() {
-                            log::debug!("Received ping");
-                            match client.send_message(&OwnedMessage::Pong(b"pong frame".to_vec())) {
-                                Ok(()) => log::debug!("Sent pong"),
-                                Err(error) => log::warn!("Pong sending error: {}", error),
-                            }
-                            continue;
-                        }
-
-                        message.take_payload()
-                    }
-                    Err(error) => {
-                        log::error!("Websocket error: {}", error);
-                        return;
-                    }
-                };
-
-                if message.is_empty() {
-                    continue;
-                }
-
-                match serde_json::from_slice::<Depth>(&message) {
-                    Ok(depth) => match tx.send(Event::Depth(depth)) {
-                        Ok(()) => {}
-                        Err(_) => break,
-                    },
-                    Err(error) => log::warn!("Parsing error: {} ({:?})", error, message),
-                }
-            });
+        if let Some(depth_period) = depth_period {
+            Self::subscribe::<Depth>(
+                format!(
+                    "wss://stream.binance.com:9443/ws/{}@depth@{depth_period}ms",
+                    symbol.to_ascii_lowercase()
+                )
+                .as_str(),
+                tx.clone(),
+            )?;
         }
 
         Ok(rx)
+    }
+
+    ///
+    /// Subscribes to a particular stream.
+    ///
+    fn subscribe<E>(url: &str, tx: mpsc::Sender<Event>) -> Result<(), Error>
+    where
+        E: Into<Event> + serde::de::DeserializeOwned,
+    {
+        let mut client = ClientBuilder::new(url)
+            .expect("WebSocket address is valid")
+            .connect_secure(None)
+            .map_err(Error::WebSocket)?;
+
+        thread::spawn(move || loop {
+            let message = match client.recv_message() {
+                Ok(message) => {
+                    if message.is_ping() {
+                        log::debug!("Received ping");
+                        match client.send_message(&OwnedMessage::Pong(b"pong frame".to_vec())) {
+                            Ok(()) => log::debug!("Sent pong"),
+                            Err(error) => log::warn!("Pong sending error: {}", error),
+                        }
+                        continue;
+                    }
+
+                    message.take_payload()
+                }
+                Err(error) => {
+                    log::error!("Websocket error: {}", error);
+                    return;
+                }
+            };
+
+            if message.is_empty() {
+                continue;
+            }
+
+            match serde_json::from_slice::<E>(&message) {
+                Ok(event) => match tx.send(event.into()) {
+                    Ok(()) => {}
+                    Err(_) => break,
+                },
+                Err(error) => log::warn!("Parsing error: {} ({:?})", error, message),
+            }
+        });
+
+        Ok(())
     }
 }

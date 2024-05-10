@@ -4,3 +4,6 @@
 
 # Rust build
 /target/
+
+# MacOS artifacts
+/**/.DS_Store

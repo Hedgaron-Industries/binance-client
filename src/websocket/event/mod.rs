@@ -18,3 +18,15 @@ pub enum Event {
     /// The depth event from the `depth` stream.
     Depth(Depth),
 }
+
+impl From<Trade> for Event {
+    fn from(inner: Trade) -> Self {
+        Self::Trade(inner)
+    }
+}
+
+impl From<Depth> for Event {
+    fn from(inner: Depth) -> Self {
+        Self::Depth(inner)
+    }
+}
